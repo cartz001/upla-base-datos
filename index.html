@@ -563,7 +563,7 @@ footer{position:relative;z-index:2;border-top:1px solid var(--border);padding:36
           <div class="logo-upload-info">
             <p>Logo que aparece en la barra de navegación</p>
             <small>Formato JPG / PNG cuadrado recomendado</small><br>
-            <small style="color:var(--text3)">Se guarda en el navegador</small>
+            <small style="color:var(--text3)">Se guarda en Supabase ✓</small>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="apbtn apbtn-sky" onclick="document.getElementById('ap-logo-inp').click()">📷 Subir Logo</button>
@@ -908,14 +908,18 @@ function loadLogo(){
 function uploadLogo(inp){
   const file=inp.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{
+  reader.onload=async e=>{
     localStorage.setItem(SK_LOGO,e.target.result);
-    loadLogo();toast('Logo actualizado ✓','s');
+    loadLogo();
+    await saveLogoToDB(e.target.result);
+    toast('Logo guardado en Supabase ✓','s');
   };
   reader.readAsDataURL(file);
 }
-function removeLogo(){
-  localStorage.removeItem(SK_LOGO);loadLogo();toast('Logo eliminado','i');
+async function removeLogo(){
+  localStorage.removeItem(SK_LOGO);
+  await deleteLogoFromDB();
+  loadLogo();toast('Logo eliminado','i');
 }
 
 /* ═══════════════════════════════
@@ -1348,13 +1352,19 @@ async function addMat(uid,sn){
 }
 
 /* Admin — delete material */
-function deleteMat(uid,sn,mi){
+async function deleteMat(uid,sn,mi){
   const units=getUnitsData();
   const u=units.find(x=>x.id===uid);
   const sem=u.semanas.find(s=>s.n===sn);
-  sem.mats.splice(mi,1);
-  saveUnitsData(units);
-  renderUnits();updateStatsSection();renderAdminUnits();
+  const mat=sem.mats[mi];
+  if(mat?.id){
+    const ok=await deleteMatFromDB(mat.id);
+    if(!ok)return;
+  } else {
+    sem.mats.splice(mi,1);
+    saveUnitsData(units);
+    renderUnits();updateStatsSection();renderAdminUnits();
+  }
   setTimeout(()=>{
     const el=document.getElementById(`aunit-${uid}`);
     if(el&&!el.classList.contains('open'))el.classList.add('open');
@@ -1400,10 +1410,12 @@ function toast(msg,type='i'){
 /* ═══════════════════════════════
    INIT
 ═══════════════════════════════ */
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded',async ()=>{
   initParts();animCanvas();buildFloaters();
+  await loadLogoFromDB();
   loadLogo();
   tryAutoLogin();
+  await loadUnitsFromDB();
   renderUnits();
   updateStatsSection();
   observeSR();
